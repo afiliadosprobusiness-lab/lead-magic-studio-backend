@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  DRAFT
+  READY
+  GENERATING
+  FAILED
+  ARCHIVED
+}
+
+enum GenerationJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum GenerationStepStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model Project {
+  id             String          @id @default(cuid())
+  ownerId        String
+  name           String
+  status         ProjectStatus   @default(DRAFT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  projectInput   ProjectInput?
+  generationJobs GenerationJob[]
+
+  @@index([ownerId, createdAt(sort: Desc)])
+}
+
+model ProjectInput {
+  id                     String   @id @default(cuid())
+  projectId              String   @unique
+  offerName              String
+  offerDescription       String
+  targetAudience         String
+  painPoints             Json
+  benefits               Json
+  uniqueValueProposition String
+  tone                   String
+  callToAction           String
+  language               String   @default("es")
+  rawWizardData          Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  project                Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+model GenerationJob {
+  id            String              @id @default(cuid())
+  projectId     String
+  status        GenerationJobStatus @default(QUEUED)
+  requestedParts Json
+  startedAt     DateTime?
+  completedAt   DateTime?
+  errorMessage  String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  steps         GenerationStep[]
+  landingMockup LandingMockup?
+  copyMockup    CopyMockup?
+  creativeMockup CreativeMockup?
+
+  @@index([projectId, createdAt(sort: Desc)])
+}
+
+model GenerationStep {
+  id              String               @id @default(cuid())
+  generationJobId String
+  key             String
+  label           String
+  order           Int
+  status          GenerationStepStatus @default(PENDING)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorMessage    String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  generationJob   GenerationJob        @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+
+  @@unique([generationJobId, key])
+  @@index([generationJobId, order])
+}
+
+model LandingMockup {
+  id              String        @id @default(cuid())
+  generationJobId String        @unique
+  headline        String
+  subheadline     String
+  ctaText         String
+  sections        Json
+  rawData         Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  generationJob   GenerationJob @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+}
+
+model CopyMockup {
+  id              String        @id @default(cuid())
+  generationJobId String        @unique
+  adPrimaryText   String
+  adHeadline      String
+  adDescription   String
+  emailSubject    String
+  emailBody       String
+  salesScriptHook String
+  rawData         Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  generationJob   GenerationJob @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+}
+
+model CreativeMockup {
+  id               String        @id @default(cuid())
+  generationJobId  String        @unique
+  concepts         Json
+  visualDirections Json
+  hooks            Json
+  rawData          Json?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  generationJob    GenerationJob @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+}
