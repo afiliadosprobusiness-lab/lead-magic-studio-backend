@@ -3,138 +3,106 @@
 ## Convenciones generales
 - Base URL versionada: `/api/v1`
 - Health sin version: `/health`
+- Alias de compatibilidad health: `/api/v1/health`
 - Formato de respuesta:
   - Success: `{ "success": true, "data": ... }`
   - Error: `{ "success": false, "error": { code, message, details?, requestId } }`
 - Correlacion de usuario (fase MVP): header `x-user-id` (opcional, fallback a `DEFAULT_USER_ID`).
 - Correlacion de request: header `x-request-id` (opcional, backend lo genera si no existe).
 
-## Endpoints iniciales
+## Endpoints
 
 ### GET /health
 Estado basico del servicio.
 
-Response `200`
-```json
-{
-  "success": true,
-  "data": {
-    "status": "ok",
-    "service": "lead-magic-studio-backend",
-    "timestamp": "2026-03-10T12:00:00.000Z"
-  }
-}
-```
-
 ### GET /api/v1/projects
 Lista proyectos del usuario actual.
 
-Response `200`
+### POST /api/v1/projects
+Crea proyecto + input del wizard.
+
+### GET /api/v1/projects/:id
+Obtiene detalle de proyecto.
+
+### POST /api/v1/projects/:id/duplicate
+Duplica proyecto e input.
+
+### POST /api/v1/projects/:id/generate
+Inicia generacion mockup tradicional.
+
+### GET /api/v1/projects/:id/generation
+Consulta estado de la ultima generacion tradicional.
+
+### GET /api/v1/projects/:id/results
+Devuelve ultima salida completada tradicional.
+
+### POST /api/v1/uploads/product-images
+Sube una o mas fotos de producto para UGC Ads Generator.
+
+Request body
 ```json
 {
-  "success": true,
-  "data": [
+  "projectId": "cuid",
+  "files": [
     {
-      "id": "cuid",
-      "name": "Proyecto A",
-      "status": "READY",
-      "createdAt": "ISO",
-      "updatedAt": "ISO",
-      "latestGenerationStatus": "COMPLETED"
+      "fileName": "product.png",
+      "mimeType": "image/png",
+      "contentBase64": "iVBORw0KGgoAAAANSUhEUgAA..."
     }
   ]
 }
 ```
 
-### POST /api/v1/projects
-Crea proyecto + input del wizard.
-
-Request body
-```json
-{
-  "name": "Proyecto A",
-  "input": {
-    "offerName": "LeadMagic Studio",
-    "offerDescription": "Descripcion",
-    "targetAudience": "Founders SaaS",
-    "painPoints": ["pain 1"],
-    "benefits": ["benefit 1"],
-    "uniqueValueProposition": "UVP",
-    "tone": "Directo",
-    "callToAction": "Agenda demo",
-    "language": "es"
-  }
-}
-```
-
 Response `201`
 ```json
 {
   "success": true,
   "data": {
-    "id": "cuid",
-    "name": "Proyecto A",
-    "status": "DRAFT",
-    "ownerId": "demo-user",
-    "createdAt": "ISO",
-    "updatedAt": "ISO",
-    "input": {}
+    "projectId": "cuid",
+    "uploadedImages": [
+      {
+        "id": "cuid",
+        "projectId": "cuid",
+        "storageProvider": "LOCAL_DEV",
+        "storagePath": "storage/uploads/product-images/...",
+        "publicUrl": null,
+        "originalFileName": "product.png",
+        "mimeType": "image/png",
+        "sizeBytes": 218111,
+        "checksumSha256": "hex",
+        "createdAt": "ISO"
+      }
+    ]
   }
 }
 ```
 
-### GET /api/v1/projects/:id
-Obtiene detalle de proyecto.
+### GET /api/v1/ugc/presets/scenes
+Lista presets de escenas permitidos.
 
-Response `200`
-```json
-{
-  "success": true,
-  "data": {
-    "id": "cuid",
-    "name": "Proyecto A",
-    "status": "READY",
-    "ownerId": "demo-user",
-    "createdAt": "ISO",
-    "updatedAt": "ISO",
-    "input": {}
-  }
-}
-```
+### GET /api/v1/ugc/presets/avatars
+Lista presets de avatars permitidos.
 
-### POST /api/v1/projects/:id/duplicate
-Duplica proyecto e input.
-
-Request body (opcional)
-```json
-{
-  "name": "Proyecto A (Copy)"
-}
-```
-
-Response `201`
-```json
-{
-  "success": true,
-  "data": {
-    "id": "new-cuid",
-    "name": "Proyecto A (Copy)",
-    "status": "DRAFT"
-  }
-}
-```
-
-### POST /api/v1/projects/:id/generate
-Inicia generacion mock.
+### POST /api/v1/ugc/generate
+Crea y ejecuta un job UGC asociado a un proyecto.
 
 Request body
 ```json
 {
-  "parts": ["landing", "copy", "creatives"]
+  "projectId": "cuid",
+  "productImageIds": ["cuid-image-1"],
+  "creativeType": "creator_style_ad_concepts",
+  "targetPlatform": "tiktok",
+  "scenePreset": "studio_tabletop",
+  "avatarPreset": "creator_friendly_expert",
+  "toneStyle": "direct response",
+  "customPrompt": "foco en beneficios funcionales",
+  "outputFormats": ["vertical_9_16", "square_1_1"],
+  "brandSafeMode": true,
+  "disclosureEnabled": true,
+  "contentPolicyChecks": ["creativeTypeAllowlist", "prohibitedClaims", "outputModeration"]
 }
 ```
-
-`parts` es opcional; por defecto se generan todas las partes.
 
 Response `202`
 ```json
@@ -142,67 +110,81 @@ Response `202`
   "success": true,
   "data": {
     "projectId": "cuid",
-    "generation": {
+    "job": {
       "id": "cuid",
+      "projectId": "cuid",
       "status": "COMPLETED",
-      "requestedParts": ["landing", "copy", "creatives"],
-      "steps": []
-    }
-  }
-}
-```
-
-### GET /api/v1/projects/:id/generation
-Consulta estado de la ultima generacion.
-
-Response `200`
-```json
-{
-  "success": true,
-  "data": {
-    "projectId": "cuid",
-    "projectStatus": "READY",
-    "generation": {
-      "id": "cuid",
-      "status": "COMPLETED",
-      "createdAt": "ISO",
+      "progress": 100,
+      "creativeType": "creator_style_ad_concepts",
+      "targetPlatform": "tiktok",
+      "scenePreset": "studio_tabletop",
+      "avatarPreset": "creator_friendly_expert",
+      "toneStyle": "direct response",
+      "outputFormats": ["vertical_9_16", "square_1_1"],
+      "brandSafeMode": true,
+      "disclosureEnabled": true,
+      "contentPolicyChecks": ["creativeTypeAllowlist", "prohibitedClaims", "outputModeration"],
+      "productImageIds": ["cuid-image-1"],
+      "errorMessage": null,
       "startedAt": "ISO",
       "completedAt": "ISO",
-      "steps": [
-        {
-          "key": "LANDING_MOCKUP",
-          "status": "COMPLETED"
-        }
-      ]
+      "createdAt": "ISO",
+      "updatedAt": "ISO"
     }
   }
 }
 ```
 
-### GET /api/v1/projects/:id/results
-Devuelve ultima salida completada.
+### GET /api/v1/ugc/jobs/:id
+Devuelve el estado de un job UGC.
+
+### GET /api/v1/ugc/jobs/:id/results
+Devuelve resultado estructurado del job UGC.
 
 Response `200`
 ```json
 {
   "success": true,
   "data": {
+    "jobId": "cuid",
     "projectId": "cuid",
-    "generationId": "cuid",
-    "results": {
-      "landing": {},
-      "copy": {},
-      "creatives": {}
+    "status": "COMPLETED",
+    "result": {
+      "creativeVariants": [],
+      "imageResultReferences": [],
+      "hookSuggestions": [],
+      "shortCopySuggestions": [],
+      "ctaSuggestions": [],
+      "placementFormats": ["vertical_9_16"],
+      "disclosureFlags": {
+        "enabled": true,
+        "label": "AI-generated synthetic ad concept. Not a real customer testimonial.",
+        "requiredByBrandSafe": true
+      },
+      "safetyMetadata": {
+        "brandSafeMode": true,
+        "appliedChecks": ["creativeTypeAllowlist", "prohibitedClaims"],
+        "blockedClaimCount": 0,
+        "filteredClaims": [],
+        "warnings": []
+      }
     }
   }
 }
 ```
 
-Si no hay generacion completada, `generationId` y cada parte retornan `null`.
+### GET /api/v1/ugc/projects/:projectId/jobs
+Lista historial de jobs UGC por proyecto.
+
+## Reglas de producto/safety UGC
+- El modulo se define como synthetic UGC para anuncios.
+- Prohibido generar contenido que simule testimonios/reseñas/autenticidad de cliente real.
+- `brandSafeMode=true` requiere `disclosureEnabled=true`.
+- El backend bloquea claims engañosos en request y filtra output en capa de moderacion.
 
 ## Errores posibles
 - `400 BAD_REQUEST`: validacion o payload invalido.
-- `404 NOT_FOUND`: proyecto o ruta no encontrada.
+- `404 NOT_FOUND`: proyecto/job/ruta no encontrada.
 - `409 CONFLICT`: conflicto de dominio (reservado para futuras reglas).
 - `500 INTERNAL_ERROR`: error inesperado.
 
@@ -216,4 +198,3 @@ Si no hay generacion completada, `generationId` y cada parte retornan `null`.
 - Version actual: `v1`.
 - Estrategia: versionar por path (`/api/v1`, `/api/v2`).
 - Cambios breaking se publican en nueva version, manteniendo `v1` por compatibilidad.
-

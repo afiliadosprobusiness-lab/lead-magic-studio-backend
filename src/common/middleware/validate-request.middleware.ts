@@ -22,7 +22,15 @@ export function validateRequest(schema: ValidationSchema) {
       }
 
       if (schema.query) {
-        req.query = schema.query.parse(req.query) as Request["query"];
+        const parsedQuery = schema.query.parse(req.query) as Request["query"];
+
+        // Express 5 exposes `req.query` via a getter, so direct assignment throws.
+        Object.defineProperty(req, "query", {
+          configurable: true,
+          enumerable: true,
+          value: parsedQuery,
+          writable: true
+        });
       }
 
       next();

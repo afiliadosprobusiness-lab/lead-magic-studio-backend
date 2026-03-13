@@ -31,15 +31,71 @@ enum GenerationStepStatus {
   SKIPPED
 }
 
+enum CopyObjective {
+  DIRECT_SALE
+  AWARENESS
+  REMARKETING
+  LAUNCH
+  URGENCY_OFFER
+}
+
+enum CopyTone {
+  AGGRESSIVE
+  PREMIUM
+  EMOTIONAL
+  DIRECT
+  MINIMALIST
+}
+
+enum PublisherPlatform {
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  GOOGLE
+}
+
+enum PublicationDraftStatus {
+  DRAFT
+  READY
+}
+
+enum ProjectHistoryEventType {
+  GENERATION_CREATED
+  GENERATION_COMPLETED
+  GENERATION_FAILED
+  UGC_JOB_CREATED
+  UGC_JOB_COMPLETED
+  UGC_JOB_FAILED
+  GENERATED_COPY_CREATED
+  COPY_TEMPLATE_CREATED
+  CREATIVE_PACK_CREATED
+  PUBLICATION_DRAFT_CREATED
+}
+
+enum CreativePackItemType {
+  LANDING_MOCKUP
+  COPY_MOCKUP
+  CREATIVE_MOCKUP
+  UGC_RESULT
+  GENERATED_COPY
+}
+
 model Project {
-  id             String          @id @default(cuid())
-  ownerId        String
-  name           String
-  status         ProjectStatus   @default(DRAFT)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  projectInput   ProjectInput?
-  generationJobs GenerationJob[]
+  id                String             @id @default(cuid())
+  ownerId           String
+  name              String
+  status            ProjectStatus      @default(DRAFT)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  projectInput      ProjectInput?
+  generationJobs    GenerationJob[]
+  ugcGenerationJobs UGCGenerationJob[]
+  productImages     UGCProductImage[]
+  generatedCopies   GeneratedCopy[]
+  copyTemplates     CopyTemplate[]
+  creativePacks     CreativePack[]
+  publicationDrafts PublicationDraft[]
+  historyEvents     ProjectHistoryEvent[]
 
   @@index([ownerId, createdAt(sort: Desc)])
 }
@@ -137,4 +193,208 @@ model CreativeMockup {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   generationJob    GenerationJob @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+}
+
+model UGCProductImage {
+  id               String                 @id @default(cuid())
+  projectId        String
+  storageProvider  String
+  storagePath      String
+  publicUrl        String?
+  originalFileName String
+  mimeType         String
+  sizeBytes        Int
+  checksumSha256   String
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  project          Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generationJobs   UGCGenerationJobImage[]
+
+  @@index([projectId, createdAt(sort: Desc)])
+}
+
+model UGCGenerationJob {
+  id                 String                 @id @default(cuid())
+  projectId          String
+  status             GenerationJobStatus    @default(QUEUED)
+  progress           Int                    @default(0)
+  requestPayload     Json
+  creativeType       String
+  targetPlatform     String
+  scenePreset        String
+  avatarPreset       String
+  toneStyle          String
+  outputFormats      Json
+  brandSafeMode      Boolean                @default(true)
+  disclosureEnabled  Boolean                @default(true)
+  contentPolicyChecks Json
+  startedAt          DateTime?
+  completedAt        DateTime?
+  errorMessage       String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  project            Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  images             UGCGenerationJobImage[]
+  result             UGCGenerationResult?
+
+  @@index([projectId, createdAt(sort: Desc)])
+}
+
+model UGCGenerationJobImage {
+  generationJobId String
+  productImageId  String
+  createdAt       DateTime         @default(now())
+  generationJob   UGCGenerationJob @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+  productImage    UGCProductImage  @relation(fields: [productImageId], references: [id], onDelete: Cascade)
+
+  @@id([generationJobId, productImageId])
+  @@index([productImageId])
+}
+
+model UGCGenerationResult {
+  id                    String           @id @default(cuid())
+  generationJobId       String           @unique
+  creativeVariants      Json
+  imageResultReferences Json
+  hookSuggestions       Json
+  shortCopySuggestions  Json
+  ctaSuggestions        Json
+  placementFormats      Json
+  disclosureFlags       Json
+  safetyMetadata        Json
+  rawProviderResponse   Json?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  generationJob         UGCGenerationJob @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+}
+
+model GeneratedCopy {
+  id                    String           @id @default(cuid())
+  projectId             String
+  ownerId               String
+  sourceTemplateId      String?
+  sourceGenerationJobId String?
+  objective             CopyObjective
+  tone                  CopyTone
+  platform              PublisherPlatform?
+  language              String           @default("es")
+  label                 String?
+  headline              String
+  primaryText           String
+  cta                   String
+  shortCaption          String
+  hookVariants          Json
+  rawProviderResponse   Json?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  project               Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceTemplate        CopyTemplate?    @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
+  sourceCreativePacks   CreativePack[]   @relation("CreativePackCreatedFromCopy")
+  creativePackItems     CreativePackItem[]
+  publicationDrafts     PublicationDraft[]
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
+}
+
+model CopyTemplate {
+  id              String            @id @default(cuid())
+  ownerId         String
+  projectId       String?
+  name            String
+  description     String?
+  objective       CopyObjective?
+  tone            CopyTone?
+  platform        PublisherPlatform?
+  language        String            @default("es")
+  isSystem        Boolean           @default(false)
+  isPreset        Boolean           @default(false)
+  templateText    String
+  ctaDefault      String?
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  project         Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  generatedCopies GeneratedCopy[]
+
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([projectId, createdAt(sort: Desc)])
+}
+
+model CreativePack {
+  id                String             @id @default(cuid())
+  projectId         String
+  ownerId           String
+  name              String
+  objective         CopyObjective?
+  tone              CopyTone?
+  platform          PublisherPlatform?
+  notes             String?
+  createdFromCopyId String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdFromCopy   GeneratedCopy?     @relation("CreativePackCreatedFromCopy", fields: [createdFromCopyId], references: [id], onDelete: SetNull)
+  items             CreativePackItem[]
+  publicationDrafts PublicationDraft[]
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
+}
+
+model CreativePackItem {
+  id             String               @id @default(cuid())
+  creativePackId String
+  generatedCopyId String?
+  assetType      CreativePackItemType
+  assetId        String
+  label          String?
+  metadata       Json?
+  createdAt      DateTime             @default(now())
+  creativePack   CreativePack         @relation(fields: [creativePackId], references: [id], onDelete: Cascade)
+  generatedCopy  GeneratedCopy?       @relation(fields: [generatedCopyId], references: [id], onDelete: SetNull)
+
+  @@unique([creativePackId, assetType, assetId])
+  @@index([creativePackId, createdAt(sort: Asc)])
+  @@index([assetType, assetId])
+}
+
+model PublicationDraft {
+  id                String                 @id @default(cuid())
+  projectId         String
+  ownerId           String
+  platform          PublisherPlatform
+  selectedCopyId    String?
+  creativePackId    String?
+  selectedAssetRefs Json
+  captionText       String
+  finalText         String?
+  ctaText           String?
+  finalUrl          String?
+  status            PublicationDraftStatus @default(DRAFT)
+  scheduledAt       DateTime?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  selectedCopy      GeneratedCopy?         @relation(fields: [selectedCopyId], references: [id], onDelete: SetNull)
+  creativePack      CreativePack?          @relation(fields: [creativePackId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
+}
+
+model ProjectHistoryEvent {
+  id         String                @id @default(cuid())
+  projectId  String
+  ownerId    String
+  eventType  ProjectHistoryEventType
+  entityType String
+  entityId   String
+  summary    String
+  payload    Json?
+  createdAt  DateTime              @default(now())
+  project    Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
 }

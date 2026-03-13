@@ -1,4 +1,5 @@
 import { AppError } from "../../common/errors/app-error";
+import { ProjectHistoryService } from "../project-history/project-history.service";
 import type { ProjectsRepository } from "../projects/projects.repository";
 import type { ProjectDetailDto } from "../projects/projects.types";
 import { generationStepKeyByPart, GenerationRepository } from "./generation.repository";
@@ -12,7 +13,8 @@ export class GenerationService {
   constructor(
     private readonly projectsRepository: ProjectsRepository,
     private readonly generationRepository: GenerationRepository,
-    private readonly generationEngine: GenerationEngine = new MockGenerationEngine()
+    private readonly generationEngine: GenerationEngine = new MockGenerationEngine(),
+    private readonly projectHistoryService: ProjectHistoryService = new ProjectHistoryService()
   ) {}
 
   async startGeneration(ownerId: string, projectId: string, payload: GenerateProjectDto) {
@@ -28,6 +30,17 @@ export class GenerationService {
 
     const requestedParts = payload.parts?.length ? payload.parts : DEFAULT_GENERATION_PARTS;
     const job = await this.generationRepository.createJob(projectId, requestedParts);
+    await this.projectHistoryService.recordEventSafe({
+      projectId,
+      ownerId,
+      eventType: "GENERATION_CREATED",
+      entityType: "generation_job",
+      entityId: job.id,
+      summary: `Generation job created with parts: ${requestedParts.join(", ")}`,
+      payload: {
+        requestedParts
+      }
+    });
 
     await this.projectsRepository.updateStatus(projectId, "GENERATING");
     await this.generationRepository.updateJobStatus(job.id, "PROCESSING");
@@ -65,6 +78,17 @@ export class GenerationService {
 
       await this.generationRepository.updateJobStatus(job.id, "COMPLETED");
       await this.projectsRepository.updateStatus(project.id, "READY");
+      await this.projectHistoryService.recordEventSafe({
+        projectId: project.id,
+        ownerId,
+        eventType: "GENERATION_COMPLETED",
+        entityType: "generation_job",
+        entityId: job.id,
+        summary: "Generation job completed",
+        payload: {
+          requestedParts
+        }
+      });
 
       const latestJob = await this.generationRepository.getLatestJobByProject(project.id);
 
@@ -89,6 +113,17 @@ export class GenerationService {
         error instanceof Error ? error.message : "Unexpected generation error"
       );
       await this.projectsRepository.updateStatus(project.id, "FAILED");
+      await this.projectHistoryService.recordEventSafe({
+        projectId: project.id,
+        ownerId,
+        eventType: "GENERATION_FAILED",
+        entityType: "generation_job",
+        entityId: job.id,
+        summary: "Generation job failed",
+        payload: {
+          error: error instanceof Error ? error.message : "Unexpected generation error"
+        }
+      });
 
       throw AppError.internal("Generation failed");
     }
@@ -114,4 +149,3 @@ export class GenerationService {
 export type GenerationStatusResponse = Awaited<ReturnType<GenerationService["getGenerationStatus"]>>;
 export type StartGenerationResponse = Awaited<ReturnType<GenerationService["startGeneration"]>>;
 export type ProjectForGeneration = ProjectDetailDto;
-
